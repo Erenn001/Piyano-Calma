@@ -1,86 +1,122 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<title>Piyano Çal!</title>
+    <meta charset="UTF-8">
+    <title>Kamera Piyano PRO</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-<style>
-body {
-    margin:0;
-    background:black;
-    overflow:hidden;
-    font-family: Arial, sans-serif;
-}
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
 
-canvas {
-    position:absolute;
-    top:0;
-    left:0;
-}
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
 
-/* 🎹 Piyano */
-.piano {
-    position:absolute;
-    bottom:0;
-    width:100%;
-    height:220px;
-    display:flex;
-}
+        /* 📢 Üst Panel */
+        .info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
 
-.key {
-    flex:1;
-    background:linear-gradient(to bottom,#fff,#ddd);
-    border:1px solid #000;
-    transition:0.1s;
-}
+        .info h1 { margin: 0; font-size: 20px; }
+        .info p { margin: 5px 0 0; font-size: 14px; opacity: 0.8; }
 
-.key.active {
-    background:gold;
-    box-shadow:0 0 20px gold;
-}
+        /* 🎹 Piyano Alanı */
+        .piano-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 220px;
+            z-index: 5;
+        }
 
-/* 📢 Bilgi paneli */
-.info {
-    position:absolute;
-    top:20px;
-    left:20px;
-    background:rgba(0,0,0,0.6);
-    color:white;
-    padding:15px 20px;
-    border-radius:10px;
-    backdrop-filter: blur(5px);
-    box-shadow:0 0 15px rgba(0,0,0,0.5);
-}
+        .white-keys {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
 
-.info h1 {
-    margin:0;
-    font-size:20px;
-}
+        .key.white {
+            flex: 1;
+            background: linear-gradient(to bottom, #fff, #ddd);
+            border: 1px solid #000;
+            border-radius: 0 0 5px 5px;
+            transition: 0.1s;
+        }
 
-.info p {
-    margin:5px 0 0;
-    font-size:14px;
-    opacity:0.8;
-}
-</style>
+        .key.white.active {
+            background: gold;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+        }
+
+        /* Siyah Tuş Görselleri */
+        .black-markers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .marker {
+            position: absolute;
+            background: #000;
+            width: 6%;
+            height: 100%;
+            border-radius: 0 0 3px 3px;
+        }
+    </style>
 </head>
-
 <body>
 
 <video id="video" style="display:none"></video>
 <canvas id="canvas"></canvas>
 
-<!-- 📢 ÜST YAZI -->
 <div class="info">
     <h1>🎹 Kamera ile Piyano</h1>
-    <p>Parmağını tuşların üzerine getir ve çal</p>
-    <p>Ekrana tıkla → tam ekran</p>
+    <p>Ekrana tıkla → tam ekran ve ses</p>
 </div>
 
-<div class="piano" id="piano"></div>
+<div class="piano-container">
+    <div class="white-keys">
+        <div class="key white" data-note="C"></div>
+        <div class="key white" data-note="D"></div>
+        <div class="key white" data-note="E"></div>
+        <div class="key white" data-note="F"></div>
+        <div class="key white" data-note="G"></div>
+        <div class="key white" data-note="A"></div>
+        <div class="key white" data-note="B"></div>
+        <div class="key white" data-note="C2"></div>
+    </div>
+
+    <div class="black-markers">
+        <div class="marker" style="left: 9.5%"></div>
+        <div class="marker" style="left: 22%"></div>
+        <div class="marker" style="left: 47%"></div>
+        <div class="marker" style="left: 59.5%"></div>
+        <div class="marker" style="left: 72%"></div>
+    </div>
+</div>
 
 <script>
 const video = document.getElementById("video");
@@ -90,101 +126,83 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-/* NOTALAR */
-const notes = ["C","D","E","F","G","A","B","C2"];
-
-/* GERÇEK SESLER */
 const sounds = {
-    C: new Audio("C.wav"),
-    D: new Audio("D.wav"),
-    E: new Audio("E.wav"),
-    F: new Audio("F.wav"),
-    G: new Audio("G.wav"),
-    A: new Audio("A.wav"),
-    B: new Audio("B.wav"),
-    C2: new Audio("C2.wav")
+    C: new Audio("C.wav"), D: new Audio("D.wav"), E: new Audio("E.wav"),
+    F: new Audio("F.wav"), G: new Audio("G.wav"), A: new Audio("A.wav"),
+    B: new Audio("B.wav"), C2: new Audio("C2.wav")
 };
 
-function play(note){
+let audioEnabled = false;
+function play(note) {
+    if(!audioEnabled) return;
     let s = sounds[note].cloneNode();
     s.play();
 }
 
-/* TUŞLAR */
-const piano = document.getElementById("piano");
-
-notes.forEach((n,i)=>{
-    let key = document.createElement("div");
-    key.className="key";
-    key.dataset.note = n;
-    piano.appendChild(key);
-});
-
-/* EL TAKİP */
 const hands = new Hands({
     locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
 });
 
 hands.setOptions({
-    maxNumHands:2,
-    modelComplexity:1,
-    minDetectionConfidence:0.7,
-    minTrackingConfidence:0.7
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
 });
 
-let lastPlay = {};
+let activeStatus = {};
 
-hands.onResults(res=>{
+hands.onResults(res => {
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // kamera görüntüsü
     ctx.save();
     ctx.scale(-1,1);
     ctx.drawImage(res.image, -canvas.width, 0, canvas.width, canvas.height);
     ctx.restore();
 
+    let currentFrameNotes = new Set();
+
     if(res.multiHandLandmarks){
-        res.multiHandLandmarks.forEach(hand=>{
-            let lm = hand[8];
-            let x = (1 - lm.x) * canvas.width;
-            let y = lm.y * canvas.height;
+        res.multiHandLandmarks.forEach(hand => {
+            let x = (1 - hand[8].x) * canvas.width;
+            let y = hand[8].y * canvas.height;
 
             ctx.beginPath();
             ctx.arc(x,y,10,0,2*Math.PI);
             ctx.fillStyle="lime";
             ctx.fill();
 
-            document.querySelectorAll(".key").forEach((k,i)=>{
+            document.querySelectorAll(".key.white").forEach(k => {
                 let r = k.getBoundingClientRect();
-
                 if(x > r.left && x < r.right && y > r.top){
-                    k.classList.add("active");
-
-                    if(!lastPlay[i]){
-                        play(notes[i]);
-                        lastPlay[i] = true;
-                    }
-                } else {
-                    k.classList.remove("active");
-                    lastPlay[i] = false;
+                    currentFrameNotes.add(k.dataset.note);
                 }
             });
         });
     }
+
+    document.querySelectorAll(".key.white").forEach(k => {
+        let note = k.dataset.note;
+        if(currentFrameNotes.has(note)){
+            if(!activeStatus[note]){
+                play(note);
+                k.classList.add("active");
+                activeStatus[note] = true;
+            }
+        } else {
+            k.classList.remove("active");
+            activeStatus[note] = false;
+        }
+    });
 });
 
-/* KAMERA */
-const camera = new Camera(video,{
-    onFrame: async ()=>{
-        await hands.send({image: video});
-    },
-    width:640,
-    height:480
+const camera = new Camera(video, {
+    onFrame: async () => { await hands.send({image: video}); },
+    width: 640, height: 480
 });
 camera.start();
 
-/* TAM EKRAN */
-document.body.onclick = ()=>{
+document.body.onclick = () => {
+    audioEnabled = true;
     document.body.requestFullscreen();
 };
 </script>
